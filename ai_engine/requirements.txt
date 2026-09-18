@@ -1,0 +1,7 @@
+ultralytics==8.2.0
+mediapipe==1.0.1
+tensorflow==2.17.0
+google-generativeai==0.5.4
+opencv-python==4.9.0.80
+numpy==1.26.4
+gtts==2.5.1
