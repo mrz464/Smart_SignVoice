@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes.translate import router as translate_router
 
 app = FastAPI(
     title="BicaraUntukku API",
@@ -12,8 +13,11 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(translate_router, tags=["Translation"])
 
 @app.get("/")
 def root():
@@ -21,4 +25,4 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}
