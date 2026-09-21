@@ -1,122 +1,671 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final cameras = await availableCameras();
+
+  runApp(
+    BicaraUntukkuApp(cameras: cameras),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class BicaraUntukkuApp extends StatelessWidget {
+  final List<CameraDescription> cameras;
 
-  // This widget is the root of your application.
+  const BicaraUntukkuApp({
+    super.key,
+    required this.cameras,
+  });
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'BicaraUntukku',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: LoginScreen(cameras: cameras),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+class LoginScreen extends StatefulWidget {
+  final List<CameraDescription> cameras;
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  const LoginScreen({
+    super.key,
+    required this.cameras,
+  });
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _LoginScreenState extends State<LoginScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  void login() {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email == 'guru@bisindo.com' && password == 'admin123') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            cameras: widget.cameras,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email atau password salah.'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.sign_language,
+                  size: 80,
+                  color: Colors.blue,
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'BicaraUntukku',
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Smart SignVoice',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: Icon(Icons.lock),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: login,
+                    child: const Text(
+                      'LOGIN',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Demo: guru@bisindo.com / admin123',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// HOME SCREEN
+// ============================================================
+
+class HomeScreen extends StatelessWidget {
+  final List<CameraDescription> cameras;
+
+  const HomeScreen({
+    super.key,
+    required this.cameras,
+  });
+
+  void openCamera(BuildContext context) {
+    if (cameras.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kamera tidak ditemukan.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(
+          camera: cameras.first,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('BicaraUntukku'),
+        centerTitle: true,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Center(
+              child: Icon(
+                Icons.sign_language,
+                size: 80,
+                color: Colors.blue,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Center(
+              child: Text(
+                'Selamat Datang!',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            const Center(
+              child: Text(
+                'Terjemahkan bahasa isyarat BISINDO '
+                    'menjadi teks dan suara menggunakan AI.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            Card(
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.videocam,
+                          color: Colors.blue,
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Terjemahkan Bahasa Isyarat',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    const Text(
+                      'Rekam gerakan bahasa isyarat BISINDO '
+                          'dan sistem AI akan memprosesnya.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: () => openCamera(context),
+                        icon: const Icon(Icons.camera_alt),
+                        label: const Text(
+                          'MULAI REKAM ISYARAT',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.history,
+                  color: Colors.blue,
+                ),
+                title: const Text(
+                  'Riwayat Terjemahan',
+                ),
+                subtitle: const Text(
+                  'Lihat hasil terjemahan sebelumnya',
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                ),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Fitur riwayat akan dibuat setelah backend selesai.',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Card(
+              color: Colors.blue.shade50,
+              child: const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome,
+                      color: Colors.blue,
+                      size: 35,
+                    ),
+
+                    SizedBox(width: 15),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AI Smart SignVoice',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'MediaPipe + Bidirectional LSTM + Gemini AI',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            const Center(
+              child: Text(
+                'BicaraUntukku v1.0',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+}
+
+// ============================================================
+// CAMERA SCREEN
+// ============================================================
+
+class CameraScreen extends StatefulWidget {
+  final CameraDescription camera;
+
+  const CameraScreen({
+    super.key,
+    required this.camera,
+  });
+
+  @override
+  State<CameraScreen> createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends State<CameraScreen> {
+  late CameraController _controller;
+
+  bool _isInitialized = false;
+  bool _isRecording = false;
+  String? _videoPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+
+    try {
+      await _controller.initialize();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isInitialized = true;
+      });
+    } on CameraException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Kamera error: ${e.code}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (!_isInitialized) {
+      return;
+    }
+
+    if (_controller.value.isRecordingVideo) {
+      return;
+    }
+
+    try {
+      await _controller.startVideoRecording();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = true;
+        _videoPath = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Perekaman dimulai.',
+          ),
+        ),
+      );
+    } on CameraException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal mulai rekam: ${e.code}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    if (!_isInitialized) {
+      return;
+    }
+
+    if (!_controller.value.isRecordingVideo) {
+      return;
+    }
+
+    try {
+      final XFile video =
+      await _controller.stopVideoRecording();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+        _videoPath = video.path;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Video berhasil direkam.',
+          ),
+        ),
+      );
+    } on CameraException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal berhenti rekam: ${e.code}',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Rekam Bahasa Isyarat',
+        ),
+      ),
+
+      body: !_isInitialized
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
+          : Column(
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CameraPreview(_controller),
+
+                if (_isRecording)
+                  Positioned(
+                    top: 20,
+                    left: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius:
+                        BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'MEREKAM',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                if (_videoPath != null) ...[
+                  const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: 35,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Video berhasil disimpan',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  Text(
+                    _videoPath!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+                ],
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton.icon(
+                    onPressed: _isRecording
+                        ? _stopRecording
+                        : _startRecording,
+                    icon: Icon(
+                      _isRecording
+                          ? Icons.stop
+                          : Icons.fiber_manual_record,
+                    ),
+                    label: Text(
+                      _isRecording
+                          ? 'BERHENTI REKAM'
+                          : 'MULAI REKAM',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isRecording
+                          ? Colors.red
+                          : Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
