@@ -5,16 +5,12 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart'; // <-- IMPORT BARU
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final cameras = await availableCameras();
-
-  runApp(
-    BicaraUntukkuApp(cameras: cameras),
-  );
+  runApp(BicaraUntukkuApp(cameras: cameras));
 }
 
 class BicaraUntukkuApp extends StatelessWidget {
@@ -40,7 +36,7 @@ class BicaraUntukkuApp extends StatelessWidget {
 }
 
 // ============================================================
-// LOGIN SCREEN
+// LOGIN SCREEN (MODERN UI)
 // ============================================================
 
 class LoginScreen extends StatefulWidget {
@@ -69,15 +65,22 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            cameras: widget.cameras,
-          ),
+          builder: (context) => HomeScreen(cameras: widget.cameras),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email atau password salah.'),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Email atau password salah!'),
+            ],
+          ),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -93,84 +96,338 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 60, 24, 40),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade800, Colors.blue.shade500],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(36),
+                  bottomRight: Radius.circular(36),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.sign_language_rounded,
+                      size: 64,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'BicaraUntukku',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Smart SignVoice Translator',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.85),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Masuk Akun',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Masukkan email dan password untuk melanjutkan',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'contoh@bisindo.com',
+                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.blue),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blue, width: 1.5)),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.blue),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blue, width: 1.5)),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: const Color(0xFF94A3B8)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Container(
+                      width: double.infinity,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [Colors.blue.shade600, Colors.blue.shade800]),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('LOGIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Belum punya akun? ', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => RegisterScreen(cameras: widget.cameras)));
+                          },
+                          child: Text('Daftar di sini', style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text('Demo Akun: guru@bisindo.com / admin123', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// REGISTER SCREEN (MODERN UI)
+// ============================================================
+
+class RegisterScreen extends StatefulWidget {
+  final List<CameraDescription> cameras;
+
+  const RegisterScreen({
+    super.key,
+    required this.cameras,
+  });
+
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  void register() {
+    final name = nameController.text.trim();
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Semua kolom wajib diisi!'), backgroundColor: Colors.orange.shade700, behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Password dan Konfirmasi Password tidak cocok!'), backgroundColor: Colors.red.shade600, behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8), Text('Registrasi berhasil! Silakan login.')]),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _customInputDecoration({required String label, required IconData prefixIcon, Widget? suffixIcon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(prefixIcon, color: Colors.blue),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blue, width: 1.5)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Daftar Akun', style: TextStyle(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1E293B),
+      ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Container(
             padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
+            ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.sign_language,
-                  size: 80,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'BicaraUntukku',
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Smart SignVoice',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                const Text('Buat Akun Baru', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                const SizedBox(height: 6),
+                const Text('Lengkapi data di bawah untuk bergabung', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                const SizedBox(height: 24),
+                TextField(controller: nameController, decoration: _customInputDecoration(label: 'Nama Lengkap', prefixIcon: Icons.person_outline_rounded)),
+                const SizedBox(height: 16),
+                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: _customInputDecoration(label: 'Email', prefixIcon: Icons.email_outlined)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: passwordController,
                   obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
-                    border: const OutlineInputBorder(),
+                  decoration: _customInputDecoration(
+                    label: 'Password',
+                    prefixIcon: Icons.lock_outline_rounded,
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                      ),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: const Color(0xFF94A3B8)),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
+                const SizedBox(height: 16),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: _customInputDecoration(
+                    label: 'Konfirmasi Password',
+                    prefixIcon: Icons.lock_reset_rounded,
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      icon: Icon(_obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: const Color(0xFF94A3B8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Container(
                   width: double.infinity,
-                  height: 50,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [Colors.blue.shade600, Colors.blue.shade800]),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                  ),
                   child: ElevatedButton(
-                    onPressed: login,
-                    child: const Text(
-                      'LOGIN',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    onPressed: register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
+                    child: const Text('DAFTAR SEKARANG', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
                   ),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Demo: guru@bisindo.com / admin123',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Sudah punya akun? ', style: TextStyle(color: Color(0xFF64748B))),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Text('Login di sini', style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -196,9 +453,7 @@ class HomeScreen extends StatelessWidget {
   void openCamera(BuildContext context) {
     if (cameras.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kamera tidak ditemukan.'),
-        ),
+        const SnackBar(content: Text('Kamera tidak ditemukan.')),
       );
       return;
     }
@@ -206,9 +461,8 @@ class HomeScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CameraScreen(
-          camera: cameras.first,
-        ),
+        // --- SEKARANG MENGIRIM SELURUH LIST KAMERA BUKAN CUMA SATU ---
+        builder: (context) => CameraScreen(cameras: cameras),
       ),
     );
   }
@@ -216,41 +470,21 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('BicaraUntukku'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('BicaraUntukku'), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(
-              child: Icon(
-                Icons.sign_language,
-                size: 80,
-                color: Colors.blue,
-              ),
-            ),
+            const Center(child: Icon(Icons.sign_language, size: 80, color: Colors.blue)),
             const SizedBox(height: 20),
-            const Center(
-              child: Text(
-                'Selamat Datang!',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            const Center(child: Text('Selamat Datang!', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
             const SizedBox(height: 10),
             const Center(
               child: Text(
                 'Terjemahkan bahasa isyarat BISINDO menjadi teks dan suara menggunakan AI.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 15, color: Colors.grey),
               ),
             ),
             const SizedBox(height: 30),
@@ -265,20 +499,11 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         Icon(Icons.videocam, color: Colors.blue),
                         SizedBox(width: 10),
-                        Text(
-                          'Terjemahkan Bahasa Isyarat',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Text('Terjemahkan Bahasa Isyarat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     const SizedBox(height: 15),
-                    const Text(
-                      'Rekam gerakan bahasa isyarat BISINDO dan sistem AI akan memprosesnya.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                    const Text('Rekam gerakan bahasa isyarat BISINDO dan sistem AI akan memprosesnya.', style: TextStyle(color: Colors.grey)),
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
@@ -301,13 +526,7 @@ class HomeScreen extends StatelessWidget {
                 subtitle: const Text('Lihat hasil terjemahan sebelumnya'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // --- PERBAIKAN: NAVIGASI KE HALAMAN RIWAYAT ---
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HistoryScreen(),
-                    ),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen()));
                 },
               ),
             ),
@@ -324,18 +543,9 @@ class HomeScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'AI Smart SignVoice',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('AI Smart SignVoice', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                           SizedBox(height: 5),
-                          Text(
-                            'MediaPipe + Bidirectional LSTM + Gemini AI',
-                            style: TextStyle(fontSize: 13, color: Colors.grey),
-                          ),
+                          Text('MediaPipe + Bidirectional LSTM + Gemini AI', style: TextStyle(fontSize: 13, color: Colors.grey)),
                         ],
                       ),
                     ),
@@ -344,12 +554,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 30),
-            const Center(
-              child: Text(
-                'BicaraUntukku v1.0',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ),
+            const Center(child: Text('BicaraUntukku v1.0', style: TextStyle(color: Colors.grey, fontSize: 12))),
           ],
         ),
       ),
@@ -358,15 +563,15 @@ class HomeScreen extends StatelessWidget {
 }
 
 // ============================================================
-// CAMERA SCREEN
+// CAMERA SCREEN (BISA SWITCH KAMERA DEPAN/BELAKANG)
 // ============================================================
 
 class CameraScreen extends StatefulWidget {
-  final CameraDescription camera;
+  final List<CameraDescription> cameras; // <-- SEKARANG MENERIMA LIST KAMERA
 
   const CameraScreen({
     super.key,
-    required this.camera,
+    required this.cameras,
   });
 
   @override
@@ -382,6 +587,8 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _isProcessing = false;
   bool _isPlayingAudio = false;
 
+  int _selectedCameraIndex = 0; // <-- INDEKS KAMERA YANG SEDANG AKTIF (0 biasa belakang, 1 biasa depan)
+
   String? _videoPath;
   int? _videoSize;
   String? _sentence;
@@ -394,14 +601,10 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final response = await http.get(Uri.parse('$_backendUrl/health'));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backend: ${response.statusCode} ${response.body}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backend: ${response.statusCode} ${response.body}')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal konek backend: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal konek backend: $e')));
     }
   }
 
@@ -422,9 +625,7 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isPlayingAudio = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memutar audio:\n$e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memutar audio:\n$e')));
       }
     }
   }
@@ -478,7 +679,6 @@ class _CameraScreenState extends State<CameraScreen> {
         _isProcessing = false;
       });
 
-      // --- TAMBAHAN: SIMPAN KE RIWAYAT LOKAL ---
       if (resultSentence != null && resultSentence.trim().isNotEmpty) {
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -487,7 +687,7 @@ class _CameraScreenState extends State<CameraScreen> {
             'sentence': resultSentence,
             'timestamp': DateTime.now().toIso8601String(),
           });
-          historyList.insert(0, newEntry); // Masukkan di paling atas
+          historyList.insert(0, newEntry);
           await prefs.setStringList('translation_history', historyList);
         } catch (e) {
           debugPrint('Gagal menyimpan riwayat: $e');
@@ -514,8 +714,13 @@ class _CameraScreenState extends State<CameraScreen> {
     _initializeCamera();
   }
 
+  // --- FUNGSI MENGINISIALISASI KAMERA BERDASARKAN INDEKS ---
   Future<void> _initializeCamera() async {
-    _controller = CameraController(widget.camera, ResolutionPreset.medium, enableAudio: false);
+    _controller = CameraController(
+        widget.cameras[_selectedCameraIndex],
+        ResolutionPreset.medium,
+        enableAudio: false
+    );
     try {
       await _controller.initialize();
       await _controller.prepareForVideoRecording();
@@ -523,6 +728,25 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Kamera error: $e')));
     }
+  }
+
+  // --- FUNGSI BARU UNTUK SWITCH KAMERA ---
+  Future<void> _switchCamera() async {
+    // Jangan izinkan ganti kamera saat merekam/memproses atau jika kamera cuma ada 1
+    if (_isRecording || _isProcessing || widget.cameras.length < 2) return;
+
+    setState(() {
+      _isInitialized = false; // Tampilkan loading sebentar
+    });
+
+    await _controller.dispose(); // Matikan kamera yang aktif
+
+    // Ganti indeks (misal: dari 0 ke 1, atau dari 1 ke 0)
+    setState(() {
+      _selectedCameraIndex = (_selectedCameraIndex + 1) % widget.cameras.length;
+    });
+
+    await _initializeCamera(); // Hidupkan kamera yang baru
   }
 
   Future<void> _startRecording() async {
@@ -597,6 +821,13 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         actions: [
+          // --- TOMBOL SWITCH KAMERA (Hanya muncul jika kamera > 1) ---
+          if (widget.cameras.length > 1)
+            IconButton(
+              icon: const Icon(Icons.flip_camera_android),
+              tooltip: 'Tukar Kamera Depan/Belakang',
+              onPressed: (_isRecording || _isProcessing) ? null : _switchCamera,
+            ),
           IconButton(
             icon: const Icon(Icons.cloud_sync),
             tooltip: 'Test Backend',
@@ -608,7 +839,6 @@ class _CameraScreenState extends State<CameraScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
-          // 1. AREA KAMERA (Fixed 40% Layar dengan Rasio Normal)
           Container(
             height: MediaQuery.of(context).size.height * 0.4,
             width: double.infinity,
@@ -665,8 +895,6 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           ),
-
-          // 2. KONTEN TENGAH & TOMBOL BAWAH
           Expanded(
             child: Container(
               decoration: const BoxDecoration(
@@ -676,7 +904,6 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
               child: Column(
                 children: [
-                  // --- AREA HASIL (BISA DI-SCROLL) ---
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -768,8 +995,6 @@ class _CameraScreenState extends State<CameraScreen> {
                       ),
                     ),
                   ),
-
-                  // --- AREA TOMBOL BAWAH (SELALU TERLIHAT) ---
                   Container(
                     padding: const EdgeInsets.fromLTRB(20, 15, 20, 25),
                     decoration: BoxDecoration(
@@ -833,7 +1058,7 @@ class _CameraScreenState extends State<CameraScreen> {
 }
 
 // ============================================================
-// HISTORY SCREEN (HALAMAN BARU)
+// HISTORY SCREEN
 // ============================================================
 
 class HistoryScreen extends StatefulWidget {
