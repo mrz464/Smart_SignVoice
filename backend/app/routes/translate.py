@@ -56,6 +56,8 @@ async def translate_video(video: UploadFile = File(...)):
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc() # <--- Tambahan untuk mencetak detail error di terminal
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:

@@ -1,7 +1,12 @@
+import os
+from dotenv import load_dotenv
+
+# Membangunkan file .env agar terbaca oleh seluruh sistem backend
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse  # Ditambahkan
-import os                                   # Ditambahkan
+from fastapi.responses import FileResponse
 from app.routes.translate import router as translate_router
 from app.routes.dashboard import router as dashboard_router  # BARU
 
