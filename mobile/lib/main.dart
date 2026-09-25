@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'; // <-- IMPORT BARU
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -300,8 +301,12 @@ class HomeScreen extends StatelessWidget {
                 subtitle: const Text('Lihat hasil terjemahan sebelumnya'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Fitur riwayat akan dibuat setelah backend selesai.')),
+                  // --- PERBAIKAN: NAVIGASI KE HALAMAN RIWAYAT ---
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HistoryScreen(),
+                    ),
                   );
                 },
               ),
@@ -459,9 +464,11 @@ class _CameraScreenState extends State<CameraScreen> {
       if (decoded is! Map<String, dynamic>) throw Exception('Format response tidak valid.');
       final data = decoded;
 
+      String? resultSentence = data['sentence']?.toString();
+
       if (!mounted) return;
       setState(() {
-        _sentence = data['sentence']?.toString();
+        _sentence = resultSentence;
         _words = data['words'] is List ? data['words'] as List<dynamic> : [];
 
         final rawAudioUrl = data['audio_url'];
@@ -470,6 +477,22 @@ class _CameraScreenState extends State<CameraScreen> {
         }
         _isProcessing = false;
       });
+
+      // --- TAMBAHAN: SIMPAN KE RIWAYAT LOKAL ---
+      if (resultSentence != null && resultSentence.trim().isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final historyList = prefs.getStringList('translation_history') ?? [];
+          final newEntry = jsonEncode({
+            'sentence': resultSentence,
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+          historyList.insert(0, newEntry); // Masukkan di paling atas
+          await prefs.setStringList('translation_history', historyList);
+        } catch (e) {
+          debugPrint('Gagal menyimpan riwayat: $e');
+        }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Video berhasil diproses oleh AI.'), duration: Duration(seconds: 4)),
@@ -561,9 +584,6 @@ class _CameraScreenState extends State<CameraScreen> {
     super.dispose();
   }
 
-  // ==========================================================
-  // UI BARU YANG RAPI, RESPONSIVE, DAN KAMERA NORMAL
-  // ==========================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -597,15 +617,11 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-
-                  // --- PERBAIKAN KAMERA ---
                   Builder(
                     builder: (context) {
                       final screenWidth = MediaQuery.of(context).size.width;
                       double ratio = _controller.value.aspectRatio;
 
-                      // Sensor kamera Android default-nya landscape (> 1.0).
-                      // Jika HP ditahan posisi portrait, kita harus membalik rasionya.
                       if (ratio > 1.0) {
                         ratio = 1.0 / ratio;
                       }
@@ -620,8 +636,6 @@ class _CameraScreenState extends State<CameraScreen> {
                       );
                     },
                   ),
-                  // --- END PERBAIKAN KAMERA ---
-
                   if (_isRecording)
                     Positioned(
                       top: 20,
@@ -813,6 +827,123 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// HISTORY SCREEN (HALAMAN BARU)
+// ============================================================
+
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  List<Map<String, dynamic>> _history = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyList = prefs.getStringList('translation_history') ?? [];
+
+      if (!mounted) return;
+      setState(() {
+        _history = historyList
+            .map((item) => jsonDecode(item) as Map<String, dynamic>)
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _clearHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('translation_history');
+
+    if (!mounted) return;
+    setState(() {
+      _history = [];
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Riwayat berhasil dihapus.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Riwayat Terjemahan'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Hapus Semua Riwayat',
+            onPressed: _history.isEmpty ? null : _clearHistory,
+          )
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _history.isEmpty
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history, size: 80, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'Belum ada riwayat terjemahan.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+          ],
+        ),
+      )
+          : ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _history.length,
+        itemBuilder: (context, index) {
+          final item = _history[index];
+          final date = DateTime.tryParse(item['timestamp'] ?? '');
+
+          String formattedDate = '-';
+          if (date != null) {
+            formattedDate = '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+          }
+
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.blue.shade50,
+                child: const Icon(Icons.translate, color: Colors.blue),
+              ),
+              title: Text(
+                item['sentence'] ?? '',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(formattedDate),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

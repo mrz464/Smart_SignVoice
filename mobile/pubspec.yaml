@@ -37,6 +37,7 @@ dependencies:
   camera: ^0.12.0+1
   http: ^1.6.0
   audioplayers: ^6.7.1
+  shared_preferences: ^2.2.3  # <-- INI YANG BARU DITAMBAHKAN
 
 dev_dependencies:
   flutter_test:
