@@ -30,12 +30,29 @@ async def translate_video(video: UploadFile = File(...)):
         if "error" in hasil:
             raise HTTPException(status_code=422, detail=hasil["error"])
 
+        # ===============================================================
+        # PERBAIKAN: FORMAT DATA DISESUAIKAN DENGAN PERMINTAAN FLUTTER
+        # ===============================================================
+        
+        # 1. Flutter meminta 'words' berupa List berisi object kata & confidence
+        words_formatted = [
+            {
+                "word": hasil["kata"],
+                "confidence": hasil["confidence"]
+            }
+        ]
+
+        # 2. Ambil hanya nama filenya saja (misal: "output_Siang.mp3") 
+        # dari audio_path, lalu gabungkan dengan rute /audio/
+        nama_file_audio = os.path.basename(hasil["audio_path"])
+        audio_url_formatted = f"/audio/{nama_file_audio}"
+
+        # 3. Kembalikan menggunakan keys bahasa inggris persis seperti di main.dart
         return {
-            "status"    : "success",
-            "kata"      : hasil["kata"],
-            "confidence": hasil["confidence"],
-            "kalimat"   : hasil["kalimat"],
-            "audio_path": hasil["audio_path"]
+            "success": True,
+            "words": words_formatted,
+            "sentence": hasil["kalimat"],
+            "audio_url": audio_url_formatted
         }
 
     except Exception as e:

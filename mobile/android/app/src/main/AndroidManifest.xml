@@ -2,11 +2,14 @@
 
     <!-- Permission untuk menggunakan kamera HP -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- TAMBAHKAN INI: Permission untuk akses jaringan/internet -->
+    <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
         android:label="BicaraUntukku"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"> <!-- TAMBAHKAN INI: Izin untuk HTTP biasa -->
 
         <activity
             android:name=".MainActivity"
