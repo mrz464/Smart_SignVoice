@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse  # Ditambahkan
 import os                                   # Ditambahkan
 from app.routes.translate import router as translate_router
+from app.routes.dashboard import router as dashboard_router  # BARU
 
 app = FastAPI(
     title="BicaraUntukku API",
@@ -20,6 +21,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(translate_router, tags=["Translation"])
+app.include_router(dashboard_router, tags=["Dashboard"])  # BARU
 
 @app.get("/")
 def root():
