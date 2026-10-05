@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -587,6 +588,11 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _isProcessing = false;
   bool _isPlayingAudio = false;
 
+  // Batas durasi rekaman: berhenti otomatis agar mirip klip data latih (pendek).
+  static const int _maxRecordSeconds = 4;
+  int _secondsLeft = _maxRecordSeconds;
+  Timer? _autoStopTimer;
+
   int _selectedCameraIndex = 0; // <-- INDEKS KAMERA YANG SEDANG AKTIF (0 biasa belakang, 1 biasa depan)
 
   String? _videoPath;
@@ -595,7 +601,7 @@ class _CameraScreenState extends State<CameraScreen> {
   List<dynamic> _words = [];
   String? _audioUrl;
 
-  static const String _backendUrl = 'http://10.210.51.30:8000';
+  static const String _backendUrl = 'http://10.200.219.30:8000';
 
   Future<void> _testBackend() async {
     try {
@@ -762,6 +768,7 @@ class _CameraScreenState extends State<CameraScreen> {
         setState(() {
           _isRecording = true;
           _isProcessing = false;
+          _secondsLeft = _maxRecordSeconds;
           _videoPath = null;
           _videoSize = null;
           _sentence = null;
@@ -769,6 +776,20 @@ class _CameraScreenState extends State<CameraScreen> {
           _audioUrl = null;
         });
       }
+
+      // Hitung mundur, lalu berhenti sendiri saat waktu habis.
+      _autoStopTimer?.cancel();
+      _autoStopTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || !_isRecording) {
+          timer.cancel();
+          return;
+        }
+        setState(() => _secondsLeft = _secondsLeft > 0 ? _secondsLeft - 1 : 0);
+        if (_secondsLeft <= 0) {
+          timer.cancel();
+          _stopRecording();
+        }
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _isRecording = false);
@@ -779,6 +800,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _stopRecording() async {
     if (!_isInitialized || _isProcessing || !_controller.value.isRecordingVideo) return;
+    _autoStopTimer?.cancel();
     setState(() => _isProcessing = true);
     try {
       final video = await _controller.stopVideoRecording();
@@ -803,6 +825,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _autoStopTimer?.cancel();
     _controller.dispose();
     _audioPlayer.dispose();
     super.dispose();
@@ -876,12 +899,12 @@ class _CameraScreenState extends State<CameraScreen> {
                           color: Colors.red.withOpacity(0.9),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.fiber_manual_record, color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text('MEREKAM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            const Icon(Icons.fiber_manual_record, color: Colors.white, size: 14),
+                            const SizedBox(width: 6),
+                            Text('MEREKAM  ${_secondsLeft}s', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
