@@ -10,16 +10,29 @@ load_dotenv()
 # Tambahkan path ai_engine agar bisa import llm dan tts
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# ── Load model & scaler ──
-MODEL_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'app', 'ai_models', 'model_bisindo_v2.keras')
-SCALER_PATH  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'app', 'ai_models', 'scaler.pkl')
-ID_KATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'app', 'ai_models', 'id_to_kata.npy')
-
-model      = tf.keras.models.load_model(MODEL_PATH)
-scaler     = pickle.load(open(SCALER_PATH, 'rb'))
-id_to_kata = np.load(ID_KATA_PATH, allow_pickle=True).item()
+# ── Load model ──
+# Model v3 (fitur ternormalisasi, tanpa scaler) dipakai kalau file-nya ada.
+# Kalau belum, otomatis kembali ke model v2 lama supaya aplikasi tetap jalan.
+AI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'app', 'ai_models')
+V3_MODEL = os.path.join(AI_DIR, 'model_bisindo_v3.keras')
+V3_LABEL = os.path.join(AI_DIR, 'id_to_kata_v3.npy')
 
 SEQUENCE_LEN = 30
+CONFIDENCE_THRESHOLD = 0.6   # di bawah ini dianggap "isyarat tidak dikenali"
+
+if os.path.exists(V3_MODEL) and os.path.exists(V3_LABEL):
+    from bisindo_preprocess import sample_sequence, extract_features
+    MODEL_VERSION = 'v3'
+    model      = tf.keras.models.load_model(V3_MODEL)
+    scaler     = None
+    id_to_kata = np.load(V3_LABEL, allow_pickle=True).item()
+else:
+    MODEL_VERSION = 'v2'
+    model      = tf.keras.models.load_model(os.path.join(AI_DIR, 'model_bisindo_v2.keras'))
+    scaler     = pickle.load(open(os.path.join(AI_DIR, 'scaler.pkl'), 'rb'))
+    id_to_kata = np.load(os.path.join(AI_DIR, 'id_to_kata.npy'), allow_pickle=True).item()
+
+print(f"Model BISINDO dipakai: {MODEL_VERSION}")
 
 
 def predict_gesture(keypoints_sequence):
@@ -27,25 +40,30 @@ def predict_gesture(keypoints_sequence):
     Prediksi kata dari sequence keypoint tangan.
 
     Args:
-        keypoints_sequence: numpy array shape (n_frames, 63)
+        keypoints_sequence: numpy array shape (n_frames, 63), hanya frame
+                            yang tangannya terdeteksi
 
     Returns:
-        Tuple (label kata, confidence)
+        Tuple (label kata, confidence, top3) dengan top3 berisi
+        [(kata, confidence), ...] tiga tebakan teratas.
     """
-    if len(keypoints_sequence) >= SEQUENCE_LEN:
-        data = keypoints_sequence[:SEQUENCE_LEN]
+    seq = np.asarray(keypoints_sequence, dtype=np.float32)
+
+    if MODEL_VERSION == 'v3':
+        # preprocessing SAMA PERSIS dengan saat training
+        x = extract_features(sample_sequence(seq))[None]
     else:
-        pad  = np.zeros((SEQUENCE_LEN - len(keypoints_sequence), 63))
-        data = np.vstack([keypoints_sequence, pad])
+        # jalur lama model v2: 30 frame pertama + pad nol + scaler
+        if len(seq) >= SEQUENCE_LEN:
+            data = seq[:SEQUENCE_LEN]
+        else:
+            data = np.vstack([seq, np.zeros((SEQUENCE_LEN - len(seq), 63))])
+        x = scaler.transform(data.reshape(-1, 63)).reshape(1, SEQUENCE_LEN, 63)
 
-    data_flat   = data.reshape(-1, 63)
-    data_scaled = scaler.transform(data_flat).reshape(1, SEQUENCE_LEN, 63)
-
-    pred       = model.predict(data_scaled, verbose=0)
-    label_id   = np.argmax(pred)
-    confidence = float(np.max(pred))
-
-    return id_to_kata[label_id], confidence
+    pred = model.predict(x, verbose=0)[0]
+    order = np.argsort(pred)[::-1][:3]
+    top3 = [(id_to_kata[int(i)], float(pred[i])) for i in order]
+    return top3[0][0], top3[0][1], top3
 
 
 def full_pipeline(video_path):
@@ -120,8 +138,13 @@ def full_pipeline(video_path):
 
     # Prediksi kata dari keypoint
     keypoints_array  = np.array(keypoints)
-    kata, confidence = predict_gesture(keypoints_array)
-    print(f"✅ Prediksi: {kata} ({confidence*100:.2f}%)")
+    kata, confidence, top3 = predict_gesture(keypoints_array)
+    top3_teks = ", ".join(f"{k} {c*100:.0f}%" for k, c in top3)
+    print(f"✅ Prediksi: {kata} ({confidence*100:.2f}%) | Top-3: {top3_teks}")
+
+    # Jangan paksakan tebakan kalau model sendiri tidak yakin
+    if confidence < CONFIDENCE_THRESHOLD:
+        return {"error": f"Isyarat tidak dikenali dengan yakin (tebakan terdekat: {top3_teks}). Coba rekam ulang."}
 
     # Rangkai kalimat dengan LLM Gemini
     print("Merangkai kalimat dengan Gemini...")
@@ -136,7 +159,8 @@ def full_pipeline(video_path):
         "kata"       : kata,
         "confidence" : f"{confidence*100:.2f}%",
         "kalimat"    : kalimat,
-        "audio_path" : audio_path
+        "audio_path" : audio_path,
+        "top3"       : top3_teks
     }
 
 
