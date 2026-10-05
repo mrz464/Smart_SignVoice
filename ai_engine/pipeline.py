@@ -21,10 +21,10 @@ SEQUENCE_LEN = 30
 CONFIDENCE_THRESHOLD = 0.6   # di bawah ini dianggap "isyarat tidak dikenali"
 
 # ── Pengaturan akurasi (boleh diubah) ──
-# Kata yang TIDAK dijawab karena akurasinya rendah pada uji jujur (signer 4):
-# Mengapa 0%, Siang 0%, Maaf 60%, Halo 80%. Hapus sebuah nama dari daftar ini
-# kalau ingin mengaktifkannya lagi. Kosongkan ( set() ) untuk memakai semua kata.
-KATA_DIKECUALIKAN = {"Mengapa", "Siang", "Maaf", "Halo"}
+# Kata yang TIDAK dijawab karena akurasinya rendah pada uji jujur (signer 4).
+# Kosong = semua 32 kata dipakai. Isi setelah training dengan nama kata resmi
+# WL-BISINDO, contoh: {"Cari", "Lagi"}. Nama harus persis seperti di id_to_kata.
+KATA_DIKECUALIKAN = set()
 
 # Rekaman dengan tangan terdeteksi di frame lebih sedikit dari ini ditolak,
 # karena terlalu sedikit data untuk ditebak dengan benar.
