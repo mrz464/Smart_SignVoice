@@ -2,11 +2,36 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import tempfile
 import os
 import sys
+import shutil
+from datetime import datetime
 
 router = APIRouter()
 
 # Tambahkan path ai_engine
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'ai_engine'))
+
+# Muat model saat server menyala (bukan saat rekaman pertama), supaya versi model
+# dan error pemuatan langsung terlihat di terminal.
+try:
+    import pipeline  # noqa: F401
+except Exception as e:
+    print(f"[PERINGATAN] Model belum bisa dimuat saat startup: {e}")
+
+# Salinan video yang dikirim aplikasi disimpan di backend/debug_videos untuk diperiksa
+# kalau prediksinya salah. Matikan dengan environment variable SIMPAN_VIDEO_DEBUG=0.
+DEBUG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'debug_videos')
+
+
+def _simpan_video_debug(path, hasil):
+    if os.environ.get("SIMPAN_VIDEO_DEBUG", "1") == "0":
+        return
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        label = hasil.get("kata") or "gagal"
+        nama = f"{datetime.now():%Y%m%d_%H%M%S}_{label}.mp4"
+        shutil.copyfile(path, os.path.join(DEBUG_DIR, nama))
+    except Exception as e:
+        print(f"Gagal menyimpan video debug: {e}")
 
 @router.post("/translate/video")
 async def translate_video(video: UploadFile = File(...)):
@@ -26,6 +51,7 @@ async def translate_video(video: UploadFile = File(...)):
     try:
         from pipeline import full_pipeline
         hasil = full_pipeline(tmp_path)
+        _simpan_video_debug(tmp_path, hasil)
 
         if "error" in hasil:
             raise HTTPException(status_code=422, detail=hasil["error"])

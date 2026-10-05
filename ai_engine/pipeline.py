@@ -20,6 +20,16 @@ V3_LABEL = os.path.join(AI_DIR, 'id_to_kata_v3.npy')
 SEQUENCE_LEN = 30
 CONFIDENCE_THRESHOLD = 0.6   # di bawah ini dianggap "isyarat tidak dikenali"
 
+# ── Pengaturan akurasi (boleh diubah) ──
+# Kata yang TIDAK dijawab karena akurasinya rendah pada uji jujur (signer 4):
+# Mengapa 0%, Siang 0%, Maaf 60%, Halo 80%. Hapus sebuah nama dari daftar ini
+# kalau ingin mengaktifkannya lagi. Kosongkan ( set() ) untuk memakai semua kata.
+KATA_DIKECUALIKAN = {"Mengapa", "Siang", "Maaf", "Halo"}
+
+# Rekaman dengan tangan terdeteksi di frame lebih sedikit dari ini ditolak,
+# karena terlalu sedikit data untuk ditebak dengan benar.
+MIN_FRAME_TERDETEKSI = 20
+
 if os.path.exists(V3_MODEL) and os.path.exists(V3_LABEL):
     from bisindo_preprocess import sample_sequence, extract_features
     MODEL_VERSION = 'v3'
@@ -32,7 +42,10 @@ else:
     scaler     = pickle.load(open(os.path.join(AI_DIR, 'scaler.pkl'), 'rb'))
     id_to_kata = np.load(os.path.join(AI_DIR, 'id_to_kata.npy'), allow_pickle=True).item()
 
+ALLOWED_IDS = np.array([i for i, k in id_to_kata.items() if k not in KATA_DIKECUALIKAN])
+
 print(f"Model BISINDO dipakai: {MODEL_VERSION}")
+print(f"Kata aktif: {len(ALLOWED_IDS)} dari {len(id_to_kata)} (dikecualikan: {sorted(KATA_DIKECUALIKAN) or '-'})")
 
 
 def predict_gesture(keypoints_sequence):
@@ -63,7 +76,12 @@ def predict_gesture(keypoints_sequence):
     pred = model.predict(x, verbose=0)[0]
     order = np.argsort(pred)[::-1][:3]
     top3 = [(id_to_kata[int(i)], float(pred[i])) for i in order]
-    return top3[0][0], top3[0][1], top3
+
+    # Jawaban hanya dipilih dari kata yang aktif. Probabilitasnya dipakai apa adanya
+    # (tidak dinormalisasi ulang), jadi kalau model yakin pada kata yang dikecualikan,
+    # probabilitas kata aktif terbaik kecil dan rekaman ditolak oleh ambang keyakinan.
+    best = int(ALLOWED_IDS[int(np.argmax(pred[ALLOWED_IDS]))])
+    return id_to_kata[best], float(pred[best]), top3
 
 
 def full_pipeline(video_path):
@@ -135,6 +153,10 @@ def full_pipeline(video_path):
         return {"error": "Tangan tidak terdeteksi di video"}
 
     print(f"✅ {len(keypoints)} frame terdeteksi")
+
+    if len(keypoints) < MIN_FRAME_TERDETEKSI:
+        return {"error": f"Tangan hanya terlihat di {len(keypoints)} frame (minimal {MIN_FRAME_TERDETEKSI}). "
+                         "Pastikan tangan terlihat penuh di layar dengan cahaya cukup, lalu rekam ulang."}
 
     # Prediksi kata dari keypoint
     keypoints_array  = np.array(keypoints)
