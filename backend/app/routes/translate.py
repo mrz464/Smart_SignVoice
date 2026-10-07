@@ -81,6 +81,8 @@ async def translate_video(video: UploadFile = File(...)):
             "audio_url": audio_url_formatted
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc() # <--- Tambahan untuk mencetak detail error di terminal
