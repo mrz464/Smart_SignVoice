@@ -601,7 +601,7 @@ class _CameraScreenState extends State<CameraScreen> {
   List<dynamic> _words = [];
   String? _audioUrl;
 
-  static const String _backendUrl = 'http://10.200.219.30:8000';
+  static const String _backendUrl = 'https://bicarauntukku.iet-polinela.my.id/api';
 
   Future<void> _testBackend() async {
     try {
