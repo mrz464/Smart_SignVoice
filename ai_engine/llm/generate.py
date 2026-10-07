@@ -2,9 +2,14 @@ import os
 import time
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 # Load API key dari environment / .env
 load_dotenv()
+
+# Batas waktu satu panggilan Gemini (milidetik).
+# Dibatasi supaya aplikasi tidak kena 504 saat Gemini lambat.
+GEMINI_TIMEOUT_MS = 8000
 
 
 def generate_sentence(words):
@@ -33,8 +38,11 @@ def generate_sentence(words):
     else:
         input_text = words
 
-    # Buat client Gemini menggunakan API key
-    client = genai.Client(api_key=api_key)
+    # Buat client Gemini menggunakan API key, dengan batas waktu tunggu
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+    )
 
     prompt = f"""
 Kamu adalah modul pemrosesan bahasa untuk aplikasi BicaraUntukku.
@@ -58,7 +66,7 @@ Hasil:
 """
 
     # Retry otomatis jika Gemini sedang sibuk
-    max_retry = 3
+    max_retry = 2
 
     for i in range(max_retry):
         try:
@@ -79,15 +87,16 @@ Hasil:
             if "503" in error_text or "UNAVAILABLE" in error_text:
                 print(
                     f"Gemini sedang sibuk, "
-                    f"retry {i + 1}/{max_retry} dalam 5 detik..."
+                    f"retry {i + 1}/{max_retry} dalam 2 detik..."
                 )
-                time.sleep(5)
+                time.sleep(2)
 
             elif "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
                 print("Quota / rate limit Gemini tercapai.")
                 break
 
             else:
+                # Termasuk error waktu habis (timeout) -> langsung fallback
                 print(f"Error Gemini: {error_text}")
                 break
 
@@ -106,8 +115,8 @@ if __name__ == "__main__":
         "Apa",
         "Saya",
         ["Saya", "Makan", "Air"],
-        ["Halo", "Nama", "Saya"],
-        ["Terima_kasih", "Bantu"],
+        ["Saya", "Belajar", "Rumah"],
+        ["Terima_kasih", "Teman"],
     ]
 
     for test in test_cases:
