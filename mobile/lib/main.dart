@@ -5,8 +5,10 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Ditambahkan untuk Haptic Feedback
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart'; // Ditambahkan untuk Shimmer Effect
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -462,7 +464,6 @@ class HomeScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        // --- SEKARANG MENGIRIM SELURUH LIST KAMERA BUKAN CUMA SATU ---
         builder: (context) => CameraScreen(cameras: cameras),
       ),
     );
@@ -568,7 +569,7 @@ class HomeScreen extends StatelessWidget {
 // ============================================================
 
 class CameraScreen extends StatefulWidget {
-  final List<CameraDescription> cameras; // <-- SEKARANG MENERIMA LIST KAMERA
+  final List<CameraDescription> cameras;
 
   const CameraScreen({
     super.key,
@@ -588,12 +589,11 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _isProcessing = false;
   bool _isPlayingAudio = false;
 
-  // Batas durasi rekaman: berhenti otomatis agar mirip klip data latih (pendek).
   static const int _maxRecordSeconds = 4;
   int _secondsLeft = _maxRecordSeconds;
   Timer? _autoStopTimer;
 
-  int _selectedCameraIndex = 0; // <-- INDEKS KAMERA YANG SEDANG AKTIF (0 biasa belakang, 1 biasa depan)
+  int _selectedCameraIndex = 0;
 
   String? _videoPath;
   int? _videoSize;
@@ -664,12 +664,22 @@ class _CameraScreenState extends State<CameraScreen> {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('Status ${response.statusCode}: ${response.body}');
+        String errorMsg = 'Gagal memproses video (Status ${response.statusCode})';
+        try {
+          final errData = jsonDecode(response.body);
+          if (errData['detail'] != null) {
+            errorMsg = errData['detail'].toString();
+          }
+        } catch (_) {}
+        throw Exception(errorMsg);
       }
 
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) throw Exception('Format response tidak valid.');
       final data = decoded;
+
+      // [FITUR] Haptic Feedback ketika hasil terjemahan berhasil masuk!
+      HapticFeedback.heavyImpact(); 
 
       String? resultSentence = data['sentence']?.toString();
 
@@ -706,7 +716,12 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memproses: $e')));
+        String msg = e.toString().replaceAll('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ));
       }
     }
   }
@@ -720,11 +735,10 @@ class _CameraScreenState extends State<CameraScreen> {
     _initializeCamera();
   }
 
-  // --- FUNGSI MENGINISIALISASI KAMERA BERDASARKAN INDEKS ---
   Future<void> _initializeCamera() async {
     _controller = CameraController(
         widget.cameras[_selectedCameraIndex],
-        ResolutionPreset.medium,
+        ResolutionPreset.high,
         enableAudio: false
     );
     try {
@@ -736,26 +750,26 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  // --- FUNGSI BARU UNTUK SWITCH KAMERA ---
   Future<void> _switchCamera() async {
-    // Jangan izinkan ganti kamera saat merekam/memproses atau jika kamera cuma ada 1
     if (_isRecording || _isProcessing || widget.cameras.length < 2) return;
 
     setState(() {
-      _isInitialized = false; // Tampilkan loading sebentar
+      _isInitialized = false; 
     });
 
-    await _controller.dispose(); // Matikan kamera yang aktif
+    await _controller.dispose(); 
 
-    // Ganti indeks (misal: dari 0 ke 1, atau dari 1 ke 0)
     setState(() {
       _selectedCameraIndex = (_selectedCameraIndex + 1) % widget.cameras.length;
     });
 
-    await _initializeCamera(); // Hidupkan kamera yang baru
+    await _initializeCamera(); 
   }
 
   Future<void> _startRecording() async {
+    // [FITUR] Haptic Feedback ringan saat mulai merekam
+    HapticFeedback.lightImpact();
+
     if (!_isInitialized || _isProcessing || _controller.value.isRecordingVideo) return;
     try {
       await _audioPlayer.stop();
@@ -777,7 +791,6 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       }
 
-      // Hitung mundur, lalu berhenti sendiri saat waktu habis.
       _autoStopTimer?.cancel();
       _autoStopTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted || !_isRecording) {
@@ -831,6 +844,120 @@ class _CameraScreenState extends State<CameraScreen> {
     super.dispose();
   }
 
+  // [FITUR WIDGET] Animasi Shimmer Loading State
+  Widget _buildShimmerLoading() {
+    return Shimmer.fromColors(
+      key: const ValueKey('shimmer'),
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.grey.shade300, width: 2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(width: 32, height: 32, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                const SizedBox(width: 12),
+                Container(width: 150, height: 20, color: Colors.white),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Container(width: double.infinity, height: 40, color: Colors.white),
+            const SizedBox(height: 10),
+            Container(width: 200, height: 40, color: Colors.white),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 15),
+            Row(
+              children: [
+                Container(width: 80, height: 32, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+                const SizedBox(width: 8),
+                Container(width: 60, height: 32, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // [FITUR WIDGET] Card Hasil yang Sangat Mudah Dibaca & Kontras
+  Widget _buildResultCard() {
+    return Container(
+      key: const ValueKey('result'),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.15),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(color: Colors.blue.shade100, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.translate, color: Colors.blue, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Text('Hasil Terjemahan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _sentence ?? '',
+            style: const TextStyle(
+              fontSize: 34, // Ukuran Font sangat besar
+              fontWeight: FontWeight.w900, // Tebal maksimal
+              color: Color(0xFF0F172A), // Warna super kontras / gelap
+              height: 1.2,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 15),
+          if (_words.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _words.map((item) {
+                if (item is Map) {
+                  return Chip(
+                    avatar: const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                    label: Text(item['word']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    backgroundColor: Colors.green.shade50,
+                    side: BorderSide(color: Colors.green.shade200),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                  );
+                }
+                return Chip(label: Text(item.toString()));
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -844,7 +971,6 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         actions: [
-          // --- TOMBOL SWITCH KAMERA (Hanya muncul jika kamera > 1) ---
           if (widget.cameras.length > 1)
             IconButton(
               icon: const Icon(Icons.flip_camera_android),
@@ -933,58 +1059,42 @@ class _CameraScreenState extends State<CameraScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_videoPath != null) ...[
+                          if (_videoPath != null && !_isProcessing && _sentence == null) ...[
                             const Icon(Icons.check_circle, color: Colors.green, size: 40),
                             const SizedBox(height: 10),
                             const Text('Video siap diproses', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
                             const SizedBox(height: 20),
                           ],
 
-                          if (_sentence != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.blue.shade100),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.translate, color: Colors.blue),
-                                      SizedBox(width: 8),
-                                      Text('Hasil Terjemahan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 15),
-                                  Text(_sentence!, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
-                                  const SizedBox(height: 15),
-                                  const Divider(),
-                                  const SizedBox(height: 10),
-                                  if (_words.isNotEmpty)
-                                    Wrap(
-                                      spacing: 8,
-                                      children: _words.map((item) {
-                                        if (item is Map) {
-                                          return Chip(
-                                            avatar: const Icon(Icons.check_circle, size: 16, color: Colors.green),
-                                            label: Text(item['word']?.toString() ?? '-'),
-                                            backgroundColor: Colors.white,
-                                            side: BorderSide(color: Colors.grey.shade300),
-                                          );
-                                        }
-                                        return Text(item.toString());
-                                      }).toList(),
-                                    ),
-                                ],
+                          // [FITUR] Transisi Smooth + Animasi Loading State Shimmer
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 600),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.05),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            child: _isProcessing
+                                ? _buildShimmerLoading()
+                                : (_sentence != null
+                                    ? _buildResultCard()
+                                    : const SizedBox.shrink()),
+                          ),
+                          
+                          const SizedBox(height: 20),
 
-                            if (_audioUrl != null && _audioUrl!.trim().isNotEmpty) ...[
-                              Container(
+                          if (!_isProcessing && _audioUrl != null && _audioUrl!.trim().isNotEmpty) ...[
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 500),
+                              child: Container(
+                                key: const ValueKey('audio_player'),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
@@ -1012,8 +1122,8 @@ class _CameraScreenState extends State<CameraScreen> {
                                   ],
                                 ),
                               ),
-                            ]
-                          ],
+                            ),
+                          ]
                         ],
                       ),
                     ),
@@ -1036,7 +1146,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                 onPressed: _isProcessing ? null : _sendVideoToAI,
                                 icon: const Icon(Icons.auto_awesome),
                                 label: Text(
-                                  _isProcessing ? 'SEDANG MEMPROSES...' : 'KIRIM KE AI',
+                                  _isProcessing ? 'SEDANG MEMPROSES...' : 'TRANSLATE',
                                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                                 style: ElevatedButton.styleFrom(
@@ -1166,7 +1276,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         itemCount: _history.length,
         itemBuilder: (context, index) {
           final item = _history[index];
-          final date = DateTime.tryParse(item['timestamp'] ?? '');
+          final date = DateTime.tryParse(item['timestamp']?.toString() ?? '');
 
           String formattedDate = '-';
           if (date != null) {
@@ -1182,7 +1292,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: const Icon(Icons.translate, color: Colors.blue),
               ),
               title: Text(
-                item['sentence'] ?? '',
+                item['sentence']?.toString() ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               subtitle: Padding(
