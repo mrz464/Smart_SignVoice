@@ -35,6 +35,11 @@ MIN_FRAME_TERDETEKSI = 20
 # (koordinat landmark ternormalisasi, jadi hasilnya tidak berubah).
 SISI_MAKS_FRAME = 1280
 
+# Jumlah frame yang dideteksi MediaPipe dibatasi sekitar ini. Video yang lebih
+# panjang diproses selang-seling. Model hanya memakai 30 frame yang disampel merata,
+# jadi urutan gerakan tetap utuh tetapi prosesnya jauh lebih cepat.
+MAKS_FRAME_DIPROSES = 48
+
 if os.path.exists(V3_MODEL) and os.path.exists(V3_LABEL):
     from bisindo_preprocess import sample_sequence, extract_features
     MODEL_VERSION = 'v3'
@@ -51,6 +56,12 @@ ALLOWED_IDS = np.array([i for i, k in id_to_kata.items() if k not in KATA_DIKECU
 
 print(f"Model BISINDO dipakai: {MODEL_VERSION}")
 print(f"Kata aktif: {len(ALLOWED_IDS)} dari {len(id_to_kata)} (dikecualikan: {sorted(KATA_DIKECUALIKAN) or '-'})")
+
+# Panaskan model prediksi supaya rekaman pertama tidak menanggung ~1 detik pemanasan
+try:
+    model.predict(np.zeros((1, SEQUENCE_LEN, int(model.input_shape[-1])), dtype=np.float32), verbose=0)
+except Exception as e:
+    print(f"Pemanasan model dilewati: {e}")
 
 
 def predict_gesture(keypoints_sequence):
@@ -90,12 +101,13 @@ def predict_gesture(keypoints_sequence):
 
 
 # ── MediaPipe dibuat sekali saja lalu dipakai ulang ──
+HAND_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hand_landmarker.task')
 _landmarker = None
 _landmarker_lock = threading.Lock()
 
 
 def _get_landmarker(model_path):
-    """Buat MediaPipe sekali saja (hemat 6-9 detik per rekaman)."""
+    """Buat MediaPipe sekali saja (hemat 3-9 detik per rekaman)."""
     global _landmarker
     with _landmarker_lock:
         if _landmarker is None:
@@ -110,6 +122,23 @@ def _get_landmarker(model_path):
             )
             _landmarker = vision.HandLandmarker.create_from_options(options)
         return _landmarker
+
+
+def _panaskan_mediapipe():
+    """Buat MediaPipe dan jalankan sekali pada gambar kosong saat server menyala."""
+    try:
+        if not os.path.exists(HAND_MODEL_PATH):
+            return
+        import mediapipe as mp
+        lm = _get_landmarker(HAND_MODEL_PATH)
+        kosong = np.zeros((360, 640, 3), dtype=np.uint8)
+        lm.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=kosong))
+        print("MediaPipe siap.")
+    except Exception as e:
+        print(f"Pemanasan MediaPipe dilewati: {e}")
+
+
+_panaskan_mediapipe()
 
 
 def full_pipeline(video_path):
@@ -129,10 +158,7 @@ def full_pipeline(video_path):
     from tts.speak import text_to_speech
 
     # Download model MediaPipe kalau belum ada
-    model_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'hand_landmarker.task'
-    )
+    model_path = HAND_MODEL_PATH
     if not os.path.exists(model_path):
         print("Downloading MediaPipe model...")
         urllib.request.urlretrieve(
@@ -148,11 +174,24 @@ def full_pipeline(video_path):
     cap       = cv2.VideoCapture(video_path)
     keypoints = []
 
-    print("Mengekstrak keypoint dari video...")
+    # Video panjang diproses selang-seling supaya tidak lama
+    total  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    lompat = max(1, round(total / MAKS_FRAME_DIPROSES)) if total > 0 else 1
+
+    print(f"Mengekstrak keypoint dari video... ({total} frame, ambil tiap {lompat} frame)")
+    idx = 0
     while True:
+        if idx % lompat != 0:
+            # lewati frame ini tanpa dikonversi
+            if not cap.grab():
+                break
+            idx += 1
+            continue
+
         ret, frame = cap.read()
         if not ret:
             break
+        idx += 1
 
         # Kecilkan frame besar supaya deteksi lebih cepat
         sisi = max(frame.shape[:2])
@@ -181,8 +220,10 @@ def full_pipeline(video_path):
 
     print(f"✅ {len(keypoints)} frame terdeteksi")
 
-    if len(keypoints) < MIN_FRAME_TERDETEKSI:
-        return {"error": f"Tangan hanya terlihat di {len(keypoints)} frame (minimal {MIN_FRAME_TERDETEKSI}). "
+    # Batas minimum ikut menyesuaikan langkah lompat (frame yang dilewati tidak dihitung)
+    batas_min = max(12, MIN_FRAME_TERDETEKSI // lompat)
+    if len(keypoints) < batas_min:
+        return {"error": f"Tangan hanya terlihat di {len(keypoints)} frame (minimal {batas_min}). "
                          "Pastikan tangan terlihat penuh di layar dengan cahaya cukup, lalu rekam ulang."}
 
     # Prediksi kata dari keypoint
@@ -195,8 +236,8 @@ def full_pipeline(video_path):
     if confidence < CONFIDENCE_THRESHOLD:
         return {"error": f"Isyarat tidak dikenali dengan yakin (tebakan terdekat: {top3_teks}). Coba rekam ulang."}
 
-    # Rangkai kalimat dengan LLM Gemini
-    print("Merangkai kalimat dengan Gemini...")
+    # Rangkai kalimat (kalimat bawaan / cache, Gemini memperbagus di latar belakang)
+    print("Merangkai kalimat...")
     kalimat = generate_sentence(kata)
     print(f"✅ Kalimat: {kalimat}")
 
