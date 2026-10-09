@@ -1,5 +1,7 @@
 import os
+import json
 import time
+import threading
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -7,9 +9,36 @@ from google.genai import types
 # Load API key dari environment / .env
 load_dotenv()
 
-# Batas waktu satu panggilan Gemini (milidetik).
-# Dibatasi supaya aplikasi tidak kena 504 saat Gemini lambat.
+# Batas waktu satu panggilan Gemini (milidetik). Minimum yang diizinkan Google: 10000.
 GEMINI_TIMEOUT_MS = 10000
+
+# Total waktu maksimal yang dihabiskan untuk Gemini per rekaman (detik).
+# Lewat dari ini, langsung pakai kata asli supaya aplikasi tidak lama menunggu.
+GEMINI_ANGGARAN_DETIK = 12
+
+# Nama model bisa diganti lewat .env tanpa mengubah kode: GEMINI_MODEL=nama-model
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+# Kalimat yang sudah berhasil dibuat disimpan, jadi kata yang sama tidak perlu
+# memanggil Gemini lagi (hanya ada 32 kata).
+CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kalimat_cache.json")
+_cache_lock = threading.Lock()
+
+
+def _muat_cache():
+    try:
+        with open(CACHE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _simpan_cache(cache):
+    try:
+        with open(CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Gagal menyimpan cache kalimat: {e}")
 
 
 def generate_sentence(words):
@@ -38,6 +67,13 @@ def generate_sentence(words):
     else:
         input_text = words
 
+    # Pakai kalimat yang sudah pernah dibuat
+    with _cache_lock:
+        cache = _muat_cache()
+    if input_text in cache:
+        print(f"Kalimat diambil dari cache untuk '{input_text}'")
+        return cache[input_text]
+
     # Buat client Gemini menggunakan API key, dengan batas waktu tunggu
     client = genai.Client(
         api_key=api_key,
@@ -65,18 +101,23 @@ Aturan:
 Hasil:
 """
 
-    # Retry otomatis jika Gemini sedang sibuk
+    mulai = time.time()
     max_retry = 2
 
     for i in range(max_retry):
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model=GEMINI_MODEL,
                 contents=prompt
             )
 
             if response.text:
-                return response.text.strip()
+                kalimat = response.text.strip()
+                with _cache_lock:
+                    cache = _muat_cache()
+                    cache[input_text] = kalimat
+                    _simpan_cache(cache)
+                return kalimat
 
             return input_text
 
@@ -85,11 +126,13 @@ Hasil:
             error_text = str(e)
 
             if "503" in error_text or "UNAVAILABLE" in error_text:
-                print(
-                    f"Gemini sedang sibuk, "
-                    f"retry {i + 1}/{max_retry} dalam 2 detik..."
-                )
-                time.sleep(2)
+                sisa = GEMINI_ANGGARAN_DETIK - (time.time() - mulai)
+                if i + 1 < max_retry and sisa > 4:
+                    print(f"Gemini sedang sibuk, retry {i + 1}/{max_retry} dalam 1 detik...")
+                    time.sleep(1)
+                    continue
+                print("Gemini sibuk dan waktu habis, pakai kata asli.")
+                break
 
             elif "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
                 print("Quota / rate limit Gemini tercapai.")
@@ -100,7 +143,7 @@ Hasil:
                 print(f"Error Gemini: {error_text}")
                 break
 
-    # Fallback kalau Gemini tidak tersedia
+    # Fallback kalau Gemini tidak tersedia (tidak disimpan ke cache)
     print("Gemini tidak tersedia, menggunakan hasil LSTM langsung.")
     return input_text
 
