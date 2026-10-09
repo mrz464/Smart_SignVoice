@@ -33,7 +33,7 @@ MIN_FRAME_TERDETEKSI = 20
 
 # Frame yang sisi terpanjangnya lebih dari ini dikecilkan sebelum dideteksi
 # (koordinat landmark ternormalisasi, jadi hasilnya tidak berubah).
-SISI_MAKS_FRAME = 640
+SISI_MAKS_FRAME = 1280
 
 if os.path.exists(V3_MODEL) and os.path.exists(V3_LABEL):
     from bisindo_preprocess import sample_sequence, extract_features
