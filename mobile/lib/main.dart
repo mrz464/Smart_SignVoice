@@ -738,8 +738,10 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _initializeCamera() async {
     _controller = CameraController(
         widget.cameras[_selectedCameraIndex],
-        ResolutionPreset.high,
-        enableAudio: false
+        ResolutionPreset.medium,
+        enableAudio: false,
+        fps: 24,
+        videoBitrate: 1500000,
     );
     try {
       await _controller.initialize();
