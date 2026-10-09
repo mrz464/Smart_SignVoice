@@ -1,15 +1,15 @@
-
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyc
 
 # Virtual Environment
 venv/
 .venv/
 ai_engine/venv/
 
-# Environment variables
+# Environment variables (berisi kunci API, jangan di-commit)
 .env
 
 # IDE
@@ -20,10 +20,8 @@ ai_engine/venv/
 .DS_Store
 Thumbs.db
 
-venv/
-__pycache__/
-*.pyc
-.env
+# Hasil audio
 *.mp3
-.idea/
 
+# Video uji yang disimpan backend (besar, tidak perlu di GitHub)
+backend/debug_videos/
