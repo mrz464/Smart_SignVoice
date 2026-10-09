@@ -9,7 +9,7 @@ load_dotenv()
 
 # Batas waktu satu panggilan Gemini (milidetik).
 # Dibatasi supaya aplikasi tidak kena 504 saat Gemini lambat.
-GEMINI_TIMEOUT_MS = 8000
+GEMINI_TIMEOUT_MS = 10000
 
 
 def generate_sentence(words):

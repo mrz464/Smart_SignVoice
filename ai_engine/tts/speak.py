@@ -2,8 +2,8 @@ from gtts import gTTS
 import os
 
 def text_to_speech(kalimat, output_path='output.mp3'):
-    """Konversi teks ke file audio MP3"""
-    tts = gTTS(text=kalimat, lang='id')
+    """Konversi teks ke file audio MP3 (dengan batas waktu supaya server tidak macet)"""
+    tts = gTTS(text=kalimat, lang='id', timeout=15)
     tts.save(output_path)
     print(f"✅ Audio disimpan: {output_path}")
     return output_path

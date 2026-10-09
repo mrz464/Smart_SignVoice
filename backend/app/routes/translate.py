@@ -1,11 +1,16 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.concurrency import run_in_threadpool
 import tempfile
 import os
 import sys
 import shutil
+import threading
 from datetime import datetime
 
 router = APIRouter()
+
+# Hanya satu video diproses pada satu waktu (RAM server dipakai bersama kelompok lain)
+_PROSES_LOCK = threading.Lock()
 
 # Tambahkan path ai_engine
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'ai_engine'))
@@ -50,7 +55,13 @@ async def translate_video(video: UploadFile = File(...)):
 
     try:
         from pipeline import full_pipeline
-        hasil = full_pipeline(tmp_path)
+
+        def _jalankan():
+            with _PROSES_LOCK:
+                return full_pipeline(tmp_path)
+
+        # Proses berat dijalankan di thread terpisah supaya server (/health dll) tetap responsif
+        hasil = await run_in_threadpool(_jalankan)
         _simpan_video_debug(tmp_path, hasil)
 
         if "error" in hasil:

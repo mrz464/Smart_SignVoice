@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 import numpy as np
 import pickle
 import tensorflow as tf
@@ -29,6 +30,10 @@ KATA_DIKECUALIKAN = set()
 # Rekaman dengan tangan terdeteksi di frame lebih sedikit dari ini ditolak,
 # karena terlalu sedikit data untuk ditebak dengan benar.
 MIN_FRAME_TERDETEKSI = 20
+
+# Frame yang sisi terpanjangnya lebih dari ini dikecilkan sebelum dideteksi
+# (koordinat landmark ternormalisasi, jadi hasilnya tidak berubah).
+SISI_MAKS_FRAME = 640
 
 if os.path.exists(V3_MODEL) and os.path.exists(V3_LABEL):
     from bisindo_preprocess import sample_sequence, extract_features
@@ -84,6 +89,29 @@ def predict_gesture(keypoints_sequence):
     return id_to_kata[best], float(pred[best]), top3
 
 
+# ── MediaPipe dibuat sekali saja lalu dipakai ulang ──
+_landmarker = None
+_landmarker_lock = threading.Lock()
+
+
+def _get_landmarker(model_path):
+    """Buat MediaPipe sekali saja (hemat 6-9 detik per rekaman)."""
+    global _landmarker
+    with _landmarker_lock:
+        if _landmarker is None:
+            from mediapipe.tasks import python
+            from mediapipe.tasks.python import vision
+            options = vision.HandLandmarkerOptions(
+                base_options=python.BaseOptions(model_asset_path=model_path),
+                num_hands=1,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+            _landmarker = vision.HandLandmarker.create_from_options(options)
+        return _landmarker
+
+
 def full_pipeline(video_path):
     """
     Pipeline lengkap: video → keypoint → kata → kalimat → audio
@@ -96,8 +124,6 @@ def full_pipeline(video_path):
     """
     import cv2
     import mediapipe as mp
-    from mediapipe.tasks import python
-    from mediapipe.tasks.python import vision
     import urllib.request
     from llm.generate import generate_sentence
     from tts.speak import text_to_speech
@@ -115,16 +141,8 @@ def full_pipeline(video_path):
         )
         print("✅ MediaPipe model downloaded!")
 
-    # Setup MediaPipe Hand Landmarker
-    base_options = python.BaseOptions(model_asset_path=model_path)
-    options      = vision.HandLandmarkerOptions(
-        base_options=base_options,
-        num_hands=1,
-        min_hand_detection_confidence=0.5,
-        min_hand_presence_confidence=0.5,
-        min_tracking_confidence=0.5
-    )
-    landmarker = vision.HandLandmarker.create_from_options(options)
+    # Ambil MediaPipe Hand Landmarker (dibuat sekali, dipakai ulang)
+    landmarker = _get_landmarker(model_path)
 
     # Ekstrak keypoint dari video
     cap       = cv2.VideoCapture(video_path)
@@ -135,6 +153,15 @@ def full_pipeline(video_path):
         ret, frame = cap.read()
         if not ret:
             break
+
+        # Kecilkan frame besar supaya deteksi lebih cepat
+        sisi = max(frame.shape[:2])
+        if sisi > SISI_MAKS_FRAME:
+            skala = SISI_MAKS_FRAME / sisi
+            frame = cv2.resize(
+                frame,
+                (int(frame.shape[1] * skala), int(frame.shape[0] * skala))
+            )
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image  = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
