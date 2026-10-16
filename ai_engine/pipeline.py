@@ -23,8 +23,8 @@ CONFIDENCE_THRESHOLD = 0.6   # di bawah ini dianggap "isyarat tidak dikenali"
 
 # ── Pengaturan akurasi (boleh diubah) ──
 # Kata yang TIDAK dijawab karena akurasinya rendah pada uji jujur (signer 4).
-# Kosong = semua 32 kata dipakai. Isi setelah training dengan nama kata resmi
-# WL-BISINDO, contoh: {"Cari", "Lagi"}. Nama harus persis seperti di id_to_kata.
+# Kosong = semua 32 kata dipakai. Isi dengan nama kata resmi WL-BISINDO,
+# contoh: {"Cari", "Lagi"}. Nama harus persis seperti di id_to_kata.
 KATA_DIKECUALIKAN = set()
 
 # Rekaman dengan tangan terdeteksi di frame lebih sedikit dari ini ditolak,
@@ -141,6 +141,36 @@ def _panaskan_mediapipe():
 _panaskan_mediapipe()
 
 
+def buka_video(video_path):
+    """
+    Buka video dan tentukan rotasi yang harus diterapkan ke setiap frame.
+
+    Video HP yang direkam tegak disimpan mendatar dengan tanda rotasi
+    (misalnya 270). OpenCV di server Linux tidak selalu menerapkannya, jadi
+    tangan terbaca miring 90 derajat. Di sini rotasi otomatis dimatikan dan
+    frame diputar sendiri, supaya hasilnya sama di laptop maupun server.
+
+    Returns:
+        (cap, kode_rotasi) dengan kode_rotasi None kalau tidak perlu diputar.
+    """
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    derajat = 0
+    try:
+        if hasattr(cv2, 'CAP_PROP_ORIENTATION_AUTO'):
+            cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
+        if hasattr(cv2, 'CAP_PROP_ORIENTATION_META'):
+            derajat = int(round(cap.get(cv2.CAP_PROP_ORIENTATION_META) or 0)) % 360
+    except Exception:
+        derajat = 0
+    kode = {
+        90: cv2.ROTATE_90_CLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+    }.get(derajat)
+    return cap, kode, derajat
+
+
 def full_pipeline(video_path):
     """
     Pipeline lengkap: video → keypoint → kata → kalimat → audio
@@ -170,15 +200,15 @@ def full_pipeline(video_path):
     # Ambil MediaPipe Hand Landmarker (dibuat sekali, dipakai ulang)
     landmarker = _get_landmarker(model_path)
 
-    # Ekstrak keypoint dari video
-    cap       = cv2.VideoCapture(video_path)
+    # Buka video dan baca tanda rotasinya
+    cap, kode_rotasi, derajat = buka_video(video_path)
     keypoints = []
 
     # Video panjang diproses selang-seling supaya tidak lama
     total  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     lompat = max(1, round(total / MAKS_FRAME_DIPROSES)) if total > 0 else 1
 
-    print(f"Mengekstrak keypoint dari video... ({total} frame, ambil tiap {lompat} frame)")
+    print(f"Mengekstrak keypoint dari video... ({total} frame, ambil tiap {lompat} frame, rotasi {derajat})")
     idx = 0
     while True:
         if idx % lompat != 0:
@@ -192,6 +222,10 @@ def full_pipeline(video_path):
         if not ret:
             break
         idx += 1
+
+        # Putar frame sesuai tanda rotasi video (video HP yang direkam tegak)
+        if kode_rotasi is not None:
+            frame = cv2.rotate(frame, kode_rotasi)
 
         # Kecilkan frame besar supaya deteksi lebih cepat
         sisi = max(frame.shape[:2])
