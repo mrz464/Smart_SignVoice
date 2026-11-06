@@ -14,10 +14,13 @@ import 'package:shimmer/shimmer.dart'; // Ditambahkan untuk Shimmer Effect
 // KONFIGURASI API
 // ============================================================
 // Ganti alamat ini sesuai tempat backend berjalan:
-// - server kampus : 'https://bicarauntukku.iet-polinela.my.id/api'
-// - laptop lokal  : 'http://IP_LAPTOP:8000' (tanpa /api)
+// - localhost (Web / Desktop Windows / adb reverse): 'http://localhost:8000'
+// - localhost Android Emulator                     : 'http://10.0.2.2:8000'
+// - HP Fisik via Wi-Fi                             : 'http://10.42.155.30:8000'
+// - server kampus                                  : 'https://bicarauntukku.iet-polinela.my.id/api'
+// Catatan: Port default backend lokal adalah 8000
 class ApiConfig {
-  static const String baseUrl = 'https://bicarauntukku.iet-polinela.my.id/api';
+  static const String baseUrl = 'http://10.42.155.30:8000';
   static const Duration timeout = Duration(seconds: 20);
 }
 

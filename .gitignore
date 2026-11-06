@@ -8,9 +8,16 @@ __pycache__/
 venv/
 .venv/
 ai_engine/venv/
+backend/venv/
+**/venv/
 
 # Environment variables (berisi kunci API, jangan di-commit)
 .env
+.env.*
+*.env
+**/.env
+**/.env.*
+!**/.env.example
 
 # IDE
 .vscode/
