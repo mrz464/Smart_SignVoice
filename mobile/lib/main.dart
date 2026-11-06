@@ -10,18 +10,93 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart'; // Ditambahkan untuk Shimmer Effect
 
+// ============================================================
+// KONFIGURASI API
+// ============================================================
+// Ganti alamat ini sesuai tempat backend berjalan:
+// - server kampus : 'https://bicarauntukku.iet-polinela.my.id/api'
+// - laptop lokal  : 'http://IP_LAPTOP:8000' (tanpa /api)
+class ApiConfig {
+  static const String baseUrl = 'https://bicarauntukku.iet-polinela.my.id/api';
+  static const Duration timeout = Duration(seconds: 20);
+}
+
+// ============================================================
+// SESI LOGIN (token disimpan di HP)
+// ============================================================
+class AuthSession {
+  static const _kToken = 'auth_token';
+  static const _kNama = 'auth_nama';
+  static const _kEmail = 'auth_email';
+  static const _kRole = 'auth_role';
+
+  static Future<void> simpan(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final user = data['user'] is Map ? Map<String, dynamic>.from(data['user'] as Map) : <String, dynamic>{};
+    await prefs.setString(_kToken, data['access_token'].toString());
+    await prefs.setString(_kNama, (user['nama'] ?? '').toString());
+    await prefs.setString(_kEmail, (user['email'] ?? '').toString());
+    await prefs.setString(_kRole, (user['role'] ?? '').toString());
+  }
+
+  static Future<String?> token() async {
+    final prefs = await SharedPreferences.getInstance();
+    final t = prefs.getString(_kToken);
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
+  static Future<String> nama() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kNama) ?? '';
+  }
+
+  static Future<void> hapus() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kToken);
+    await prefs.remove(_kNama);
+    await prefs.remove(_kEmail);
+    await prefs.remove(_kRole);
+  }
+}
+
+/// Ambil pesan error dari respons backend (field "detail"), atau pesan cadangan.
+String pesanErrorApi(http.Response response, String cadangan) {
+  try {
+    final data = jsonDecode(response.body);
+    if (data is Map && data['detail'] != null) {
+      final detail = data['detail'];
+      if (detail is String) return detail;
+      if (detail is List && detail.isNotEmpty && detail.first is Map && detail.first['msg'] != null) {
+        return detail.first['msg'].toString();
+      }
+      return detail.toString();
+    }
+  } catch (_) {}
+  return '$cadangan (Status ${response.statusCode})';
+}
+
+/// Pesan yang mudah dipahami untuk error jaringan.
+String pesanErrorJaringan(Object e) {
+  if (e is TimeoutException) return 'Server tidak merespons. Periksa koneksi internet lalu coba lagi.';
+  if (e is SocketException) return 'Tidak dapat terhubung ke server. Periksa koneksi internet.';
+  return 'Terjadi kesalahan: $e';
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final cameras = await availableCameras();
-  runApp(BicaraUntukkuApp(cameras: cameras));
+  final sudahLogin = await AuthSession.token() != null;
+  runApp(BicaraUntukkuApp(cameras: cameras, sudahLogin: sudahLogin));
 }
 
 class BicaraUntukkuApp extends StatelessWidget {
   final List<CameraDescription> cameras;
+  final bool sudahLogin;
 
   const BicaraUntukkuApp({
     super.key,
     required this.cameras,
+    this.sudahLogin = false,
   });
 
   @override
@@ -33,7 +108,7 @@ class BicaraUntukkuApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: const Color(0xFFF5F7FA),
       ),
-      home: LoginScreen(cameras: cameras),
+      home: sudahLogin ? HomeScreen(cameras: cameras) : LoginScreen(cameras: cameras),
     );
   }
 }
@@ -59,33 +134,61 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
-  void login() {
+  void _tampilkanError(String pesan) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(pesan)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> login() async {
+    if (_isLoading) return;
     final email = emailController.text.trim();
-    final password = passwordController.text.trim();
+    final password = passwordController.text;
 
-    if (email == 'guru@bisindo.com' && password == 'admin123') {
+    if (email.isEmpty || password.isEmpty) {
+      _tampilkanError('Email dan password wajib diisi!');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(ApiConfig.timeout);
+
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        _tampilkanError(pesanErrorApi(response, 'Login gagal'));
+        return;
+      }
+
+      await AuthSession.simpan(jsonDecode(response.body) as Map<String, dynamic>);
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(cameras: widget.cameras),
-        ),
+        MaterialPageRoute(builder: (context) => HomeScreen(cameras: widget.cameras)),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Email atau password salah!'),
-            ],
-          ),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+    } catch (e) {
+      if (mounted) _tampilkanError(pesanErrorJaringan(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -226,13 +329,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       child: ElevatedButton(
-                        onPressed: login,
+                        onPressed: _isLoading ? null : login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
+                          disabledBackgroundColor: Colors.transparent,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        child: const Text('LOGIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
+                        child: _isLoading
+                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                            : const Text('LOGIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -292,36 +398,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
 
-  void register() {
+  static final RegExp _polaEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  void _peringatan(String pesan, {Color? warna}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(pesan), backgroundColor: warna ?? Colors.red.shade600, behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<void> register() async {
+    if (_isLoading) return;
     final name = nameController.text.trim();
     final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-    final confirmPassword = confirmPasswordController.text.trim();
+    final password = passwordController.text;
+    final confirmPassword = confirmPasswordController.text;
 
     if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Semua kolom wajib diisi!'), backgroundColor: Colors.orange.shade700, behavior: SnackBarBehavior.floating),
-      );
+      _peringatan('Semua kolom wajib diisi!', warna: Colors.orange.shade700);
       return;
     }
-
+    if (!_polaEmail.hasMatch(email)) {
+      _peringatan('Format email tidak valid. Contoh: nama@email.com');
+      return;
+    }
+    if (password.length < 6) {
+      _peringatan('Password minimal 6 karakter.');
+      return;
+    }
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Password dan Konfirmasi Password tidak cocok!'), backgroundColor: Colors.red.shade600, behavior: SnackBarBehavior.floating),
-      );
+      _peringatan('Password dan Konfirmasi Password tidak cocok!');
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8), Text('Registrasi berhasil! Silakan login.')]),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    setState(() => _isLoading = true);
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/auth/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'nama': name, 'email': email, 'password': password}),
+          )
+          .timeout(ApiConfig.timeout);
 
-    Navigator.pop(context);
+      if (!mounted) return;
+      if (response.statusCode != 201) {
+        _peringatan(pesanErrorApi(response, 'Registrasi gagal'));
+        return;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8), Text('Registrasi berhasil! Silakan login.')]),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (mounted) _peringatan(pesanErrorJaringan(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -412,13 +552,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
                   ),
                   child: ElevatedButton(
-                    onPressed: register,
+                    onPressed: _isLoading ? null : register,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
+                      disabledBackgroundColor: Colors.transparent,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: const Text('DAFTAR SEKARANG', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
+                    child: _isLoading
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                        : const Text('DAFTAR SEKARANG', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -453,6 +596,28 @@ class HomeScreen extends StatelessWidget {
     required this.cameras,
   });
 
+  Future<void> _konfirmasiKeluar(BuildContext context) async {
+    final keluar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: const Text('Anda perlu login lagi untuk memakai fitur terjemahan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Keluar')),
+        ],
+      ),
+    );
+    if (keluar != true) return;
+    await AuthSession.hapus();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => LoginScreen(cameras: cameras)),
+      (route) => false,
+    );
+  }
+
   void openCamera(BuildContext context) {
     if (cameras.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -472,7 +637,17 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('BicaraUntukku'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('BicaraUntukku'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Keluar',
+            icon: const Icon(Icons.logout),
+            onPressed: () => _konfirmasiKeluar(context),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -601,7 +776,7 @@ class _CameraScreenState extends State<CameraScreen> {
   List<dynamic> _words = [];
   String? _audioUrl;
 
-  static const String _backendUrl = 'https://bicarauntukku.iet-polinela.my.id/api';
+  static const String _backendUrl = ApiConfig.baseUrl;
 
   Future<void> _testBackend() async {
     try {
@@ -643,6 +818,19 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (_) {}
   }
 
+  /// Token tidak ada atau kedaluwarsa: hapus sesi lalu kembali ke halaman login.
+  Future<void> _sesiHabis(String pesan) async {
+    await AuthSession.hapus();
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan), backgroundColor: Colors.red.shade600));
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => LoginScreen(cameras: widget.cameras)),
+      (route) => false,
+    );
+  }
+
   Future<void> _sendVideoToAI() async {
     if (_videoPath == null || _isProcessing) return;
 
@@ -658,10 +846,22 @@ class _CameraScreenState extends State<CameraScreen> {
       final file = File(_videoPath!);
       if (!await file.exists()) throw Exception('File video tidak ditemukan.');
 
+      final token = await AuthSession.token();
+      if (token == null) {
+        await _sesiHabis('Silakan login terlebih dahulu.');
+        return;
+      }
+
       final request = http.MultipartRequest('POST', Uri.parse('$_backendUrl/translate/video'));
+      request.headers['Authorization'] = 'Bearer $token';
       request.files.add(await http.MultipartFile.fromPath('video', _videoPath!));
-      final streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 401) {
+        await _sesiHabis(pesanErrorApi(response, 'Sesi login habis'));
+        return;
+      }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         String errorMsg = 'Gagal memproses video (Status ${response.statusCode})';
@@ -716,7 +916,9 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        String msg = e.toString().replaceAll('Exception: ', '');
+        String msg = (e is SocketException || e is TimeoutException)
+            ? pesanErrorJaringan(e)
+            : e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(msg),
           backgroundColor: Colors.red.shade700,

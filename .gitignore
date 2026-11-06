@@ -25,3 +25,5 @@ Thumbs.db
 
 # Video uji yang disimpan backend (besar, tidak perlu di GitHub)
 backend/debug_videos/
+# Database pengguna lokal
+backend/bicarauntukku.db

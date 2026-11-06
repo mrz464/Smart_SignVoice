@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.concurrency import run_in_threadpool
 import tempfile
 import os
@@ -6,6 +6,8 @@ import sys
 import shutil
 import threading
 from datetime import datetime
+
+from app.security import user_saat_ini
 
 router = APIRouter()
 
@@ -38,18 +40,33 @@ def _simpan_video_debug(path, hasil):
     except Exception as e:
         print(f"Gagal menyimpan video debug: {e}")
 
+# Batas ukuran video yang diterima (MB). Rekaman 4 detik dari aplikasi sekitar 1-5 MB.
+UKURAN_MAKS_MB = int(os.environ.get("UKURAN_MAKS_VIDEO_MB", "20"))
+EKSTENSI_DITERIMA = ('.mp4', '.mov')
+
+
 @router.post("/translate/video")
-async def translate_video(video: UploadFile = File(...)):
+async def translate_video(video: UploadFile = File(...), user=Depends(user_saat_ini)):
     """
-    Endpoint utama: terima video isyarat, kembalikan teks + kalimat + audio
+    Endpoint utama: terima video isyarat, kembalikan teks + kalimat + audio.
+    Wajib login (header Authorization: Bearer <token>).
     """
     # Validasi format file
-    if not video.filename.endswith('.mp4'):
-        raise HTTPException(status_code=400, detail="Hanya file MP4 yang diterima")
+    nama_file = (video.filename or "").lower()
+    if not nama_file.endswith(EKSTENSI_DITERIMA):
+        raise HTTPException(status_code=400, detail="Format video tidak didukung. Gunakan file MP4 atau MOV.")
+
+    content = await video.read()
+
+    # Validasi ukuran file
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File video kosong. Silakan rekam ulang.")
+    if len(content) > UKURAN_MAKS_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Ukuran video melebihi batas {UKURAN_MAKS_MB} MB.")
 
     # Simpan video sementara
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp:
-        content = await video.read()
+    akhiran = os.path.splitext(nama_file)[1] or '.mp4'
+    with tempfile.NamedTemporaryFile(delete=False, suffix=akhiran) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 

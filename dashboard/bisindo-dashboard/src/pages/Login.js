@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, TextField, Button, Typography, Alert, Chip } from '@mui/material';
+import { login } from '../services/api';
 import SignLanguageRoundedIcon from '@mui/icons-material/SignLanguageRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 
@@ -7,13 +8,37 @@ function Login() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
-  const handleLogin = () => {
-    if (email === 'guru@bisindo.com' && password === 'admin123') {
-      localStorage.setItem('token', 'dummy_token');
+  const handleLogin = async (e) => {
+    if (e) e.preventDefault();
+    setError('');
+
+    if (!email.trim() || !password) {
+      setError('Email dan password wajib diisi');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await login(email.trim(), password);
+      if (data.user?.role !== 'guru') {
+        setError('Dashboard hanya untuk akun guru. Akun pengguna cukup memakai aplikasi mobile.');
+        return;
+      }
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
       window.location.href = '/dashboard';
-    } else {
-      setError('Email atau password salah');
+    } catch (err) {
+      if (err.response?.data?.detail) {
+        setError(String(err.response.data.detail));
+      } else if (err.code === 'ECONNABORTED') {
+        setError('Server tidak merespons. Coba lagi beberapa saat.');
+      } else {
+        setError('Tidak dapat terhubung ke server.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,6 +112,8 @@ function Login() {
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
+          <Box component="form" onSubmit={handleLogin} noValidate>
+
           <TextField
             fullWidth label="Email" type="email"
             value={email} onChange={e => setEmail(e.target.value)}
@@ -98,15 +125,12 @@ function Login() {
             sx={{ mb: 3 }}
           />
           <Button
-            fullWidth variant="contained" size="large"
-            onClick={handleLogin} sx={{ py: 1.3 }}
+            fullWidth variant="contained" size="large" type="submit"
+            disabled={loading} sx={{ py: 1.3 }}
           >
-            Masuk
+            {loading ? 'Memproses...' : 'Masuk'}
           </Button>
-
-          <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={2.5}>
-            Demo: guru@bisindo.com / admin123
-          </Typography>
+          </Box>
         </Box>
       </Box>
     </Box>
