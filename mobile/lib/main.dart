@@ -20,7 +20,7 @@ import 'package:shimmer/shimmer.dart'; // Ditambahkan untuk Shimmer Effect
 // - server kampus                                  : 'https://bicarauntukku.iet-polinela.my.id/api'
 // Catatan: Port default backend lokal adalah 8000
 class ApiConfig {
-  static const String baseUrl = 'http://10.42.155.30:8000';
+  static const String baseUrl = 'https://bicarauntukku.iet-polinela.my.id/api';
   static const Duration timeout = Duration(seconds: 20);
 }
 
